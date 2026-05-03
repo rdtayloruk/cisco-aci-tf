@@ -1,0 +1,11 @@
+# Docker persistent data
+gitea_data/
+runner_data/
+
+# Terraform local state (if run locally)
+*.tfstate
+*.tfstate.backup
+.terraform/
+
+# OS files
+.DS_Store

@@ -1,0 +1,44 @@
+name: Terraform Plan
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'staging/**'
+      - 'templates/**'
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+
+      - name: Terraform Init
+        working-directory: staging
+        run: |
+          terraform init \
+            -backend-config="address=${{ gitea.server_url }}/api/packages/${{ gitea.repository_owner }}/terraform/state/staging" \
+            -backend-config="lock_address=${{ gitea.server_url }}/api/packages/${{ gitea.repository_owner }}/terraform/state/staging/lock" \
+            -backend-config="unlock_address=${{ gitea.server_url }}/api/packages/${{ gitea.repository_owner }}/terraform/state/staging/lock" \
+            -backend-config="lock_method=POST" \
+            -backend-config="unlock_method=DELETE" \
+            -backend-config="retry_wait_min=5"
+        env:
+          TF_HTTP_USERNAME: cisco-aci-admin
+          TF_HTTP_PASSWORD: Admin123!
+
+      - name: Terraform Plan
+        working-directory: staging
+        run: terraform plan -no-color -out=tfplan
+        env:
+          # In a real environment, provide secrets. We use default vars for ACI Sandbox here.
+          ACI_USERNAME: admin
+          ACI_PASSWORD: C1sco12345
+          ACI_URL: https://sandboxapicdc.cisco.com
+          TF_HTTP_USERNAME: cisco-aci-admin
+          TF_HTTP_PASSWORD: Admin123!

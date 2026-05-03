@@ -1,0 +1,76 @@
+#!/bin/bash
+set -e
+
+echo "Waiting for Gitea to start..."
+while ! curl -s http://localhost:3000/ > /dev/null 2>&1; do
+    echo "Gitea is unavailable - sleeping"
+    sleep 3
+done
+echo "Gitea is up!"
+
+# Wait a little bit for the DB to be fully ready
+sleep 5
+
+# 1. Create cisco-aci-admin user (this will also skip the install lock if it's the first admin)
+echo "Creating admin user..."
+docker exec -u git gitea gitea admin user create --username cisco-aci-admin --password 'Admin123!' --email cisco-aci-admin@example.com --admin || echo "Admin may already exist."
+
+# 2. Create cisco-aci-user
+echo "Creating standard user..."
+docker exec -u git gitea gitea admin user create --username cisco-aci-user --password 'User123!' --email cisco-aci-user@example.com || echo "User may already exist."
+
+# 3. Use API to create organization, as gitea CLI doesn't have an 'admin org create' command
+echo "Creating cisco-aci organization..."
+curl -s -X POST "http://localhost:3000/api/v1/orgs" \
+    -H "accept: application/json" -H "Content-Type: application/json" \
+    -u cisco-aci-admin:'Admin123!' \
+    -d '{
+        "username": "cisco-aci",
+        "visibility": "public",
+        "description": "Cisco ACI GitOps"
+    }' || echo "Org creation failed (might already exist)."
+
+# 4. Create cisco-aci-tf repository inside the organization
+echo "Creating cisco-aci-tf repository..."
+curl -s -X POST "http://localhost:3000/api/v1/orgs/cisco-aci/repos" \
+    -H "accept: application/json" -H "Content-Type: application/json" \
+    -u cisco-aci-admin:'Admin123!' \
+    -d '{
+        "name": "cisco-aci-tf",
+        "description": "Terraform configuration for Cisco ACI",
+        "private": false,
+        "auto_init": true,
+        "default_branch": "main"
+    }' || echo "Repo creation failed (might already exist)."
+
+# 5. Enable Actions globally and on the repository
+# We need to make sure actions are enabled. By default in new Gitea versions they might not be enabled.
+# We will modify the app.ini to ensure actions are enabled.
+echo "Enabling Actions in Gitea configuration..."
+docker exec -u git gitea gitea cert --host localhost || true # ensure certs if needed, not usually for http
+docker exec -u git gitea sed -i '/\[actions\]/d' /data/gitea/conf/app.ini || true
+docker exec -u git gitea sed -i '/ENABLED = /d' /data/gitea/conf/app.ini || true
+echo -e "\n[actions]\nENABLED = true\n" | docker exec -i -u git gitea tee -a /data/gitea/conf/app.ini > /dev/null
+echo "Restarting Gitea to apply actions configuration..."
+docker restart gitea
+
+echo "Waiting for Gitea to restart..."
+while ! curl -s -f http://localhost:3000/api/v1/meta > /dev/null 2>&1; do
+    sleep 3
+done
+sleep 5
+
+# 6. Generate Runner token and register runner
+echo "Generating Actions Runner token..."
+TOKEN=$(docker exec -u git gitea gitea --config /data/gitea/conf/app.ini forgejo-cli actions generate-runner-token || docker exec -u git gitea gitea actions generate-runner-token)
+
+echo "Runner Token: $TOKEN"
+
+echo "Registering Runner..."
+# Register the runner in the runner container
+docker exec gitea-runner act_runner register --instance http://server:3000 --token "$TOKEN" --no-interactive --name local-runner || echo "Runner may already be registered."
+
+echo "Restarting Runner..."
+docker restart gitea-runner
+
+echo "Bootstrap completed."
