@@ -47,7 +47,7 @@ curl -s -X POST "http://localhost:3000/api/v1/orgs/cisco-aci/repos" \
 # We need to make sure actions are enabled. By default in new Gitea versions they might not be enabled.
 # We will modify the app.ini to ensure actions are enabled.
 echo "Enabling Actions in Gitea configuration..."
-docker exec -u git gitea gitea cert --host localhost || true # ensure certs if needed, not usually for http
+docker exec -u git -w /tmp gitea gitea cert --host localhost || true # ensure certs if needed, not usually for http
 docker exec -u git gitea sed -i '/\[actions\]/d' /data/gitea/conf/app.ini || true
 docker exec -u git gitea sed -i '/ENABLED = /d' /data/gitea/conf/app.ini || true
 echo -e "\n[actions]\nENABLED = true\n" | docker exec -i -u git gitea tee -a /data/gitea/conf/app.ini > /dev/null
@@ -55,7 +55,7 @@ echo "Restarting Gitea to apply actions configuration..."
 docker restart gitea
 
 echo "Waiting for Gitea to restart..."
-while ! curl -s -f http://localhost:3000/api/v1/meta > /dev/null 2>&1; do
+while ! curl -s -f http://localhost:3000/api/v1/version > /dev/null 2>&1; do
     sleep 3
 done
 sleep 5
