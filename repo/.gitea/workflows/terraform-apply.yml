@@ -5,39 +5,45 @@ on:
     branches:
       - main
     paths:
-      - 'staging/**'
-      - 'templates/**'
+      - 'environments/**'
 
 jobs:
   apply:
+    name: Apply (${{ matrix.environment }}/${{ matrix.component }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        environment: [dev, prod-lon, prod-fra]
+        component: [tenants, access-policies]
+      fail-fast: false
+
     steps:
-      - name: Checkout Code
+      - name: Checkout
         uses: actions/checkout@v3
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
 
       - name: Terraform Init
-        working-directory: staging
+        working-directory: environments/${{ matrix.environment }}/${{ matrix.component }}
         run: |
           terraform init \
-            -backend-config="address=${{ gitea.server_url }}/api/packages/${{ gitea.repository_owner }}/terraform/state/staging" \
-            -backend-config="lock_address=${{ gitea.server_url }}/api/packages/${{ gitea.repository_owner }}/terraform/state/staging/lock" \
-            -backend-config="unlock_address=${{ gitea.server_url }}/api/packages/${{ gitea.repository_owner }}/terraform/state/staging/lock" \
+            -backend-config="address=${{ gitea.server_url }}/api/packages/${{ gitea.repository_owner }}/terraform/state/${{ matrix.environment }}-${{ matrix.component }}" \
+            -backend-config="lock_address=${{ gitea.server_url }}/api/packages/${{ gitea.repository_owner }}/terraform/state/${{ matrix.environment }}-${{ matrix.component }}/lock" \
+            -backend-config="unlock_address=${{ gitea.server_url }}/api/packages/${{ gitea.repository_owner }}/terraform/state/${{ matrix.environment }}-${{ matrix.component }}/lock" \
             -backend-config="lock_method=POST" \
             -backend-config="unlock_method=DELETE" \
             -backend-config="retry_wait_min=5"
         env:
-          TF_HTTP_USERNAME: cisco-aci-admin
-          TF_HTTP_PASSWORD: Admin123!
+          TF_HTTP_USERNAME: ${{ secrets.TF_HTTP_USERNAME }}
+          TF_HTTP_PASSWORD: ${{ secrets.TF_HTTP_PASSWORD }}
 
       - name: Terraform Apply
-        working-directory: staging
-        run: terraform apply -auto-approve
+        working-directory: environments/${{ matrix.environment }}/${{ matrix.component }}
+        run: terraform apply -auto-approve -no-color
         env:
-          ACI_USERNAME: admin
-          ACI_PASSWORD: C1sco12345
-          ACI_URL: https://sandboxapicdc.cisco.com
-          TF_HTTP_USERNAME: cisco-aci-admin
-          TF_HTTP_PASSWORD: Admin123!
+          TF_VAR_aci_username: ${{ secrets.ACI_USERNAME }}
+          TF_VAR_aci_password: ${{ secrets.ACI_PASSWORD }}
+          TF_VAR_aci_url: ${{ secrets.ACI_URL }}
+          TF_HTTP_USERNAME: ${{ secrets.TF_HTTP_USERNAME }}
+          TF_HTTP_PASSWORD: ${{ secrets.TF_HTTP_PASSWORD }}

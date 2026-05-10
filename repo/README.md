@@ -23,6 +23,20 @@ This directory contains the GitOps-driven Terraform codebase for automating conf
         └── tenants/
 ```
 
+## Pipeline Secrets
+
+The CI/CD pipelines require the following secrets configured in Gitea under **Settings → Secrets**:
+
+| Secret | Description |
+|---|---|
+| `ACI_USERNAME` | APIC admin username |
+| `ACI_PASSWORD` | APIC admin password |
+| `ACI_URL` | APIC base URL (e.g. `https://sandboxapicdc.cisco.com`) |
+| `TF_HTTP_USERNAME` | Gitea username for Terraform state backend |
+| `TF_HTTP_PASSWORD` | Gitea password for Terraform state backend |
+
+The pipeline runs a matrix of all `environment × component` combinations in parallel. Only paths under `environments/**` trigger a run.
+
 ## Modular Design Principles
 
 To maximize safety and maintainability:

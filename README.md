@@ -20,7 +20,31 @@ Execute the bootstrap script to create users, organizations, repositories, and r
 ./scripts/bootstrap.sh
 ```
 
-### 3. Access Gitea
+### 3. Import Existing ACI State (Optional)
+If you have existing resources already configured on the APIC, import them into Terraform state before running any plan or apply. This prevents Terraform from attempting to recreate resources that already exist.
+
+```bash
+ACI_PASSWORD=<apic-password> ./scripts/import-state.sh
+```
+
+The script queries each APIC, checks whether each resource defined in the Terraform configuration actually exists, and runs `terraform import` only for those that do. It is safe to run multiple times — resources already in state are skipped.
+
+**Key environment variables:**
+
+| Variable | Default | Description |
+|---|---|---|
+| `ACI_PASSWORD` | *(required)* | APIC admin password |
+| `ACI_USERNAME` | `admin` | APIC admin username |
+| `ACI_URL` | Cisco DevNet sandbox | Default APIC URL for all environments |
+| `ACI_URL_DEV` | `ACI_URL` | Override APIC URL for the `dev` environment |
+| `ACI_URL_PROD_LON` | `ACI_URL` | Override APIC URL for `prod-lon` |
+| `ACI_URL_PROD_FRA` | `ACI_URL` | Override APIC URL for `prod-fra` |
+| `GITEA_URL` | `http://localhost:3000` | Gitea base URL |
+| `GITEA_PASSWORD` | `Admin123!` | Gitea admin password for state backend auth |
+
+> **Note:** `bootstrap.sh` will call `import-state.sh` automatically if `ACI_PASSWORD` is set when it runs.
+
+### 4. Access Gitea
 - **URL**: http://localhost:3000
 - **Admin User**: `cisco-aci-admin` / `Admin123!`
 - **Standard User**: `cisco-aci-user` / `User123!`
@@ -54,6 +78,8 @@ Execute the bootstrap script to create users, organizations, repositories, and r
 ## Project Structure
 - `docker-compose.yml`: Infrastructure definition (Gitea + Runner).
 - `scripts/`: Initialization and helper scripts.
+  - `bootstrap.sh`: Sets up Gitea users, org, repo, and Actions Runner.
+  - `import-state.sh`: Imports pre-existing ACI resources into Terraform state.
 - `repo/`: Source code for the Cisco ACI Terraform project.
   - `.gitea/workflows/`: CI/CD pipeline definitions.
   - `modules/`: Standardized, reusable architectural blocks for ACI.

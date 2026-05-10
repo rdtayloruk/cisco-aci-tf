@@ -74,3 +74,17 @@ echo "Restarting Runner..."
 docker restart gitea-runner
 
 echo "Bootstrap completed."
+echo ""
+
+# Optionally import existing ACI state into each environment's Terraform backend.
+# This step requires ACI_PASSWORD to be set and the APIC to be reachable.
+if [ -n "${ACI_PASSWORD:-}" ]; then
+    echo "ACI_PASSWORD is set — running state import from APIC..."
+    bash "$(dirname "$0")/import-state.sh"
+else
+    echo "To import existing ACI resources into Terraform state, run:"
+    echo "  ACI_PASSWORD=<apic-password> ./scripts/import-state.sh"
+    echo ""
+    echo "Optional overrides (see import-state.sh for the full list):"
+    echo "  ACI_USERNAME=admin ACI_URL=https://<apic-host> ACI_PASSWORD=... ./scripts/import-state.sh"
+fi
