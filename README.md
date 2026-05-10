@@ -37,8 +37,6 @@ The script queries each APIC, checks whether each resource defined in the Terraf
 | `ACI_USERNAME` | `admin` | APIC admin username |
 | `ACI_URL` | Cisco DevNet sandbox | Default APIC URL for all environments |
 | `ACI_URL_DEV` | `ACI_URL` | Override APIC URL for the `dev` environment |
-| `ACI_URL_PROD_LON` | `ACI_URL` | Override APIC URL for `prod-lon` |
-| `ACI_URL_PROD_FRA` | `ACI_URL` | Override APIC URL for `prod-fra` |
 | `GITEA_URL` | `http://localhost:3000` | Gitea base URL |
 | `GITEA_PASSWORD` | `Admin123!` | Gitea admin password for state backend auth |
 
@@ -51,16 +49,72 @@ The script queries each APIC, checks whether each resource defined in the Terraf
 
 ## GitOps Workflow
 
-### Initial Setup
-1. Clone the repository from Gitea: `http://localhost:3000/cisco-aci/cisco-aci-tf.git`
-2. Push the contents of the `repo/` directory to the Gitea repository.
+### Sandbox vs. Active GitOps Repositories
 
-### Raising a Pull Request
+To maintain a clean workflow, keep your local project environments separated:
+* 📁 **Sandbox Repository (`cisco-aci-tf`)**: This is your current management directory containing Gitea, Runners, Docker-compose files, bootstrap scripts, and a local template of the infrastructure under `repo/`.
+* 📁 **Active GitOps Repository (`cisco-aci-tf-gitops`)**: This is the dedicated folder where you perform active Terraform developments, create branches, and push changes to trigger CI/CD pipelines.
+
+> [!IMPORTANT]
+> **Avoid Nested Git Repositories!**
+> Do not permanently run `git init` or active development inside your sandbox's `repo/` subdirectory. Doing so creates a nested `.git` folder, which causes Git tracking mismatches and warnings. Instead, follow the initial setup below to push the template, clean it up, and clone it to a separate directory.
+
+---
+
+### Initial Setup (Seeding Gitea)
+
+Run these commands on your host terminal to initialize Gitea's remote repository with the contents of the `repo/` template folder and safely remove any temporary tracking:
+
+```bash
+# 1. Enter the local template directory
+cd repo
+
+# 2. Temporarily initialize Git
+git init
+git checkout -b main
+git config user.name "Cisco ACI Admin"
+git config user.email "cisco-aci-admin@example.com"
+
+# 3. Commit the template contents
+git add .
+git commit -m "Initial commit of Cisco ACI Terraform infrastructure configurations"
+
+# 4. Push to Gitea (URL-encoding the '!' in Admin123! as '%21' to prevent shell errors)
+git remote add origin http://cisco-aci-admin:Admin123%21@localhost:3000/cisco-aci/cisco-aci-tf.git
+git push -u origin main --force
+
+# 5. Crucial: Remove the temporary .git directory to prevent nested repository tracking
+rm -rf .git
+```
+
+---
+
+### Working with the Active Repository
+
+Once Gitea is seeded, clone the repository to a completely separate workspace directory on your machine to perform your daily GitOps tasks:
+
+```bash
+# 1. Navigate out of the sandbox directory (e.g. to your home folder)
+cd ~/
+
+# 2. Clone Gitea's repository to a dedicated folder
+git clone http://localhost:3000/cisco-aci/cisco-aci-tf.git cisco-aci-tf-gitops
+
+# 3. Change into the active repository directory
+cd cisco-aci-tf-gitops
+```
+
+---
+
+### Raising a Pull Request (GitOps flow)
+
+Always perform your feature developments inside the separately cloned `cisco-aci-tf-gitops` folder:
+
 1. **Branching**: Create a new branch for your changes:
    ```bash
    git checkout -b feature/my-new-config
    ```
-2. **Develop**: Make your Terraform changes under the appropriate folder in the `environments/` directory (e.g., `environments/dev/tenants/`, `environments/prod-lon/access-policies/`, etc.).
+2. **Develop**: Make your Terraform changes under the appropriate folder in the `environments/` directory (e.g., `environments/dev/tenants/`, etc.).
 3. **Commit & Push**:
    ```bash
    git add .
@@ -87,8 +141,6 @@ The script queries each APIC, checks whether each resource defined in the Terraf
     - `aci-access/`: Manages Access and Physical policies (VLAN pools, Physical Domains, AAEPs).
   - `environments/`: Root composition modules for each APIC instance, maintaining isolated state boundaries:
     - `dev/`: Development APIC instance.
-    - `prod-lon/`: London Production APIC instance.
-    - `prod-fra/`: Frankfurt Production APIC instance.
     *Each environment contains:*
     - `access-policies/`: Physical/Access configurations (domains, VLANs, switch policies).
     - `fabric-policies/`: Global Fabric policies (DNS, NTP, BGP Route Reflectors).

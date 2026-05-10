@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        environment: [dev, prod-lon, prod-fra]
+        environment: [dev]
         component: [tenants, access-policies]
       fail-fast: false
 

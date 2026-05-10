@@ -9,8 +9,6 @@
 #   ACI_USERNAME          - APIC username (default: admin)
 #   ACI_URL               - Default APIC URL for all environments
 #   ACI_URL_DEV           - Override APIC URL for dev  (default: ACI_URL → sandbox)
-#   ACI_URL_PROD_LON      - Override APIC URL for prod-lon
-#   ACI_URL_PROD_FRA      - Override APIC URL for prod-fra
 #   GITEA_URL             - Gitea base URL            (default: http://localhost:3000)
 #   GITEA_ORG             - Gitea organisation        (default: cisco-aci)
 #   GITEA_USER            - Gitea username for state  (default: cisco-aci-admin)
@@ -223,11 +221,9 @@ echo ""
 
 declare -A _apic_urls=(
     ["dev"]="${ACI_URL_DEV}"
-    ["prod-lon"]="${ACI_URL_PROD_LON}"
-    ["prod-fra"]="${ACI_URL_PROD_FRA}"
 )
 
-for env in dev prod-lon prod-fra; do
+for env in dev; do
     apic_url="${_apic_urls[${env}]}"
     echo "=== ${env} (APIC: ${apic_url}) ==="
 

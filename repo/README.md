@@ -13,14 +13,6 @@ This directory contains the GitOps-driven Terraform codebase for automating conf
     │   ├── access-policies/   # Interfaces, AAEPs, switch configuration
     │   ├── fabric-policies/   # BGP, DNS, NTP, Pod settings
     │   └── tenants/           # Business-specific logical configurations
-    ├── prod-lon/              # London Production APIC instance
-    │   ├── access-policies/
-    │   ├── fabric-policies/
-    │   └── tenants/
-    └── prod-fra/              # Frankfurt Production APIC instance
-        ├── access-policies/
-        ├── fabric-policies/
-        └── tenants/
 ```
 
 ## Pipeline Secrets
