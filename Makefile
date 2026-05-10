@@ -1,4 +1,6 @@
-.PHONY: up down bootstrap logs clean
+.PHONY: up down bootstrap logs clean init
+
+init: up bootstrap
 
 up:
 	docker compose up -d

@@ -66,6 +66,13 @@ TOKEN=$(docker exec -u git gitea gitea --config /data/gitea/conf/app.ini forgejo
 
 echo "Runner Token: $TOKEN"
 
+# Ensure config.yaml is generated if it doesn't exist (e.g. after a make clean)
+if [ ! -f "runner_data/config.yaml" ]; then
+    echo "Generating runner configuration..."
+    mkdir -p runner_data
+    docker run --rm --entrypoint "" -v "$(pwd)/runner_data:/data" gitea/act_runner:latest sh -c "act_runner generate-config > /data/config.yaml"
+fi
+
 echo "Registering Runner..."
 # Register the runner in the runner container
 docker exec gitea-runner act_runner register --instance http://server:3000 --token "$TOKEN" --no-interactive --name local-runner || echo "Runner may already be registered."
