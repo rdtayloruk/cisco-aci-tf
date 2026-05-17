@@ -66,11 +66,14 @@ TOKEN=$(docker exec -u git gitea gitea --config /data/gitea/conf/app.ini forgejo
 
 echo "Runner Token: $TOKEN"
 
-# Ensure config.yaml is generated if it doesn't exist (e.g. after a make clean)
 if [ ! -f "runner_data/config.yaml" ]; then
     echo "Generating runner configuration..."
     mkdir -p runner_data
     docker run --rm --entrypoint "" -v "$(pwd)/runner_data:/data" gitea/act_runner:latest sh -c "act_runner generate-config > /data/config.yaml"
+    # Ensure the container network is set to cisco-aci-tf_gitea so jobs can access Gitea as 'server'
+    sed -i 's/network: ""/network: "cisco-aci-tf_gitea"/g' runner_data/config.yaml
+    # Fix ownership of the generated files to the host user
+    docker run --rm -v "$(pwd)/runner_data:/data" alpine chown -R "$(id -u):$(id -g)" /data || true
 fi
 
 echo "Registering Runner..."

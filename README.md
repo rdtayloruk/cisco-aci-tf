@@ -21,13 +21,33 @@ Execute the bootstrap script to create users, organizations, repositories, and r
 ```
 
 ### 3. Import Existing ACI State (Optional)
-If you have existing resources already configured on the APIC, import them into Terraform state before running any plan or apply. This prevents Terraform from attempting to recreate resources that already exist.
+If you have existing resources already configured on the APIC, you must import them into the Terraform state before running any `terraform plan` or `apply`. This prevents Terraform from attempting to recreate or destroy resources that already exist in the real world.
 
-```bash
-ACI_PASSWORD=<apic-password> ./scripts/import-state.sh
-```
+**Important:** The `import-state.sh` script does **not** automatically generate Terraform code (`.tf` or `.tfvars` files) for you. It only updates the backend state file.
 
-The script queries each APIC, checks whether each resource defined in the Terraform configuration actually exists, and runs `terraform import` only for those that do. It is safe to run multiple times — resources already in state are skipped.
+#### How to use the Import Script
+1. **Define Your Infrastructure in Code First:** Before running the script, you must manually define the existing ACI resources in your `.auto.tfvars` file (e.g., `environments/dev/tenants/dev.auto.tfvars`).
+    ```hcl
+    # Example dev.auto.tfvars defining an existing VRF and Bridge Domain
+    vrfs = ["dev_vrf"]
+    
+    bridge_domains = {
+      "dev_bd" = {
+        vrf_name = "dev_vrf"
+        subnets = {
+          "sub1" = {
+            ip    = "10.10.1.1/24"
+            scope = ["public"]
+          }
+        }
+      }
+    }
+    ```
+2. **Run the Script:** 
+    ```bash
+    ACI_PASSWORD=<apic-password> ./scripts/import-state.sh
+    ```
+3. **What the Script Does:** It acts as an automated import engine. It dynamically reads your `.auto.tfvars` variables, connects to the Cisco APIC to verify that those objects (VRFs, BDs, Subnets) actually exist, and automatically generates and runs the highly-specific `terraform import` commands for you. It is safe to run multiple times — resources already in state are skipped.
 
 **Key environment variables:**
 

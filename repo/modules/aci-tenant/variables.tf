@@ -36,3 +36,26 @@ variable "application_profiles" {
   }))
   default = {}
 }
+
+variable "contracts" {
+  description = "Set of contract names to create within the Tenant"
+  type        = set(string)
+  default     = []
+}
+
+variable "epg_bindings" {
+  description = "Map of EPG bindings (contracts and domains). Key is EPG name."
+  type = map(object({
+    app_profile = string
+    contracts = list(object({
+      name = string
+      type = string
+    }))
+    domain_binds = list(object({
+      name = string
+      type = string
+    }))
+  }))
+  default = {}
+}
+

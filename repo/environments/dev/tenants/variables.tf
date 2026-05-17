@@ -20,19 +20,18 @@ variable "aci_url" {
 variable "tenant_name" {
   description = "Name of the Tenant"
   type        = string
-  default     = "dev_tenant"
 }
 
 variable "description" {
   description = "Description of the Tenant"
   type        = string
-  default     = "Dev Tenant managed by Terraform GitOps"
+  default     = ""
 }
 
 variable "vrfs" {
   description = "VRFs to configure"
   type        = set(string)
-  default     = ["dev_vrf"]
+  default     = []
 }
 
 variable "bridge_domains" {
@@ -44,17 +43,7 @@ variable "bridge_domains" {
       scope = list(string)
     }))
   }))
-  default = {
-    "dev_bd" = {
-      vrf_name = "dev_vrf"
-      subnets = {
-        "sub1" = {
-          ip    = "10.10.1.1/24"
-          scope = ["public"]
-        }
-      }
-    }
-  }
+  default = {}
 }
 
 variable "application_profiles" {
@@ -64,13 +53,27 @@ variable "application_profiles" {
       bd_name = string
     }))
   }))
-  default = {
-    "dev_ap" = {
-      epgs = {
-        "dev_epg" = {
-          bd_name = "dev_bd"
-        }
-      }
-    }
-  }
+  default = {}
+}
+
+variable "contracts" {
+  description = "Set of contract names to create within the Tenant"
+  type        = set(string)
+  default     = []
+}
+
+variable "epg_bindings" {
+  description = "Map of EPG bindings (contracts and domains). Key is EPG name."
+  type = map(object({
+    app_profile = string
+    contracts = list(object({
+      name = string
+      type = string
+    }))
+    domain_binds = list(object({
+      name = string
+      type = string
+    }))
+  }))
+  default = {}
 }
