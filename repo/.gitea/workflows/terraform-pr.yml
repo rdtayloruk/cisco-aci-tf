@@ -5,40 +5,56 @@ on:
     branches:
       - main
     paths:
-      - 'staging/**'
-      - 'templates/**'
+      - 'environments/**'
 
 jobs:
   plan:
+    name: Plan (${{ matrix.environment }}/${{ matrix.component }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        environment: [dev]
+        component: [tenants, access-policies]
+      fail-fast: false
+
     steps:
-      - name: Checkout Code
+      - name: Checkout
         uses: actions/checkout@v3
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
 
       - name: Terraform Init
-        working-directory: staging
+        working-directory: environments/${{ matrix.environment }}/${{ matrix.component }}
         run: |
           terraform init \
-            -backend-config="address=${{ gitea.server_url }}/api/packages/${{ gitea.repository_owner }}/terraform/state/staging" \
-            -backend-config="lock_address=${{ gitea.server_url }}/api/packages/${{ gitea.repository_owner }}/terraform/state/staging/lock" \
-            -backend-config="unlock_address=${{ gitea.server_url }}/api/packages/${{ gitea.repository_owner }}/terraform/state/staging/lock" \
+            -backend-config="address=${{ gitea.server_url }}/api/packages/${{ gitea.repository_owner }}/terraform/state/${{ matrix.environment }}-${{ matrix.component }}" \
+            -backend-config="lock_address=${{ gitea.server_url }}/api/packages/${{ gitea.repository_owner }}/terraform/state/${{ matrix.environment }}-${{ matrix.component }}/lock" \
+            -backend-config="unlock_address=${{ gitea.server_url }}/api/packages/${{ gitea.repository_owner }}/terraform/state/${{ matrix.environment }}-${{ matrix.component }}/lock" \
             -backend-config="lock_method=POST" \
             -backend-config="unlock_method=DELETE" \
             -backend-config="retry_wait_min=5"
         env:
-          TF_HTTP_USERNAME: cisco-aci-admin
-          TF_HTTP_PASSWORD: Admin123!
+          TF_HTTP_USERNAME: ${{ secrets.TF_HTTP_USERNAME }}
+          TF_HTTP_PASSWORD: ${{ secrets.TF_HTTP_PASSWORD }}
 
       - name: Terraform Plan
-        working-directory: staging
-        run: terraform plan -no-color -out=tfplan
+        working-directory: environments/${{ matrix.environment }}/${{ matrix.component }}
+        run: terraform plan -no-color 2>&1 | tee plan.txt
         env:
-          # In a real environment, provide secrets. We use default vars for ACI Sandbox here.
-          ACI_USERNAME: admin
-          ACI_PASSWORD: C1sco12345
-          ACI_URL: https://sandboxapicdc.cisco.com
-          TF_HTTP_USERNAME: cisco-aci-admin
-          TF_HTTP_PASSWORD: Admin123!
+          TF_VAR_aci_username: ${{ secrets.ACI_USERNAME }}
+          TF_VAR_aci_password: ${{ secrets.ACI_PASSWORD }}
+          TF_VAR_aci_url: ${{ secrets.ACI_URL }}
+          TF_HTTP_USERNAME: ${{ secrets.TF_HTTP_USERNAME }}
+          TF_HTTP_PASSWORD: ${{ secrets.TF_HTTP_PASSWORD }}
+
+      - name: Post Plan as PR Comment
+        if: always()
+        run: |
+          jq -n --rawfile plan environments/${{ matrix.environment }}/${{ matrix.component }}/plan.txt \
+            '{"body": ("## Plan: `${{ matrix.environment }}/${{ matrix.component }}`\n```hcl\n" + $plan + "```")}' \
+          | curl -s -X POST \
+              "${{ gitea.server_url }}/api/v1/repos/${{ gitea.repository }}/issues/${{ github.event.number }}/comments" \
+              -H "Authorization: token ${{ github.token }}" \
+              -H "Content-Type: application/json" \
+              -d @-

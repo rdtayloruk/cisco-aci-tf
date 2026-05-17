@@ -62,3 +62,50 @@ resource "aci_application_epg" "main" {
   name                   = each.value.name
   relation_fv_rs_bd      = aci_bridge_domain.main[each.value.bd_name].id
 }
+
+resource "aci_contract" "main" {
+  for_each  = var.contracts
+  tenant_dn = aci_tenant.main.id
+  name      = each.key
+}
+
+locals {
+  epg_contract_bindings = flatten([
+    for epg_name, bind in var.epg_bindings : [
+      for c in bind.contracts : {
+        key           = "${bind.app_profile}_${epg_name}_${c.name}_${c.type}"
+        ap_name       = bind.app_profile
+        epg_name      = epg_name
+        contract_name = c.name
+        contract_type = c.type
+      }
+    ]
+  ])
+
+  epg_domain_bindings = flatten([
+    for epg_name, bind in var.epg_bindings : [
+      for d in bind.domain_binds : {
+        key         = "${bind.app_profile}_${epg_name}_${d.name}_${d.type}"
+        ap_name     = bind.app_profile
+        epg_name    = epg_name
+        domain_name = d.name
+        domain_type = d.type
+      }
+    ]
+  ])
+}
+
+resource "aci_epg_to_contract" "main" {
+  for_each = { for b in local.epg_contract_bindings : b.key => b }
+
+  application_epg_dn = aci_application_epg.main["${each.value.ap_name}_${each.value.epg_name}"].id
+  contract_dn        = aci_contract.main[each.value.contract_name].id
+  contract_type      = each.value.contract_type
+}
+
+resource "aci_epg_to_domain" "main" {
+  for_each = { for b in local.epg_domain_bindings : b.key => b }
+
+  application_epg_dn = aci_application_epg.main["${each.value.ap_name}_${each.value.epg_name}"].id
+  tdn                = each.value.domain_type == "phys" ? "uni/phys-${each.value.domain_name}" : (each.value.domain_type == "vmm" ? "uni/vmmp-VMware/dom-${each.value.domain_name}" : "uni/l2dom-${each.value.domain_name}")
+}
