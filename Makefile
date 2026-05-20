@@ -1,4 +1,10 @@
-.PHONY: up down bootstrap logs clean init
+# Load environment variables from .env file if it exists
+ifneq (,$(wildcard .env))
+    include .env
+    export
+endif
+
+.PHONY: up down bootstrap logs clean init import
 
 init: up bootstrap
 
@@ -10,6 +16,9 @@ down:
 
 bootstrap:
 	./scripts/bootstrap.sh
+
+import:
+	./scripts/import-state.sh
 
 logs:
 	docker compose logs -f

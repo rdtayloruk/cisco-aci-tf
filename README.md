@@ -8,17 +8,24 @@ This project provides a complete, self-hosted GitOps environment for managing Ci
 
 ## Getting Started
 
-### 1. Start the Environment
-Run the following command to start Gitea and the Actions Runner:
+### 1. Configure the Environment
+Copy the provided `.env.sample` template to `.env` and adjust the variables for your Cisco ACI and Gitea sandbox environments.
 ```bash
-docker-compose up -d
+cp .env.sample .env
 ```
+> [!IMPORTANT]
+> Be sure to set `ACI_PASSWORD` in your `.env` to your Cisco APIC administrator password so that state imports and Actions runner workflows can authenticate with the APIC correctly.
 
-### 2. Initialize the Platform
-Execute the bootstrap script to create users, organizations, repositories, and register the Actions Runner:
+### 2. Start and Initialize the Platform
+Spin up Gitea, register the Gitea Actions runner, and automatically provision all necessary runner secrets and repository environments in one go using:
 ```bash
-./scripts/bootstrap.sh
+make init
 ```
+This single command runs:
+1. `docker compose up -d` to bring Gitea and Gitea Actions Runner containers online.
+2. `scripts/bootstrap.sh` which dynamically loads your `.env` configuration, creates the Admin user, standard user, Organization (`cisco-aci`), Repository (`cisco-aci-tf`), registers the runner, and **automatically provisions repository secrets** (`ACI_USERNAME`, `ACI_PASSWORD`, `ACI_URL`, `TF_HTTP_USERNAME`, and `TF_HTTP_PASSWORD`) to Gitea via the REST API.
+
+---
 
 ### 3. Import Existing ACI State (Optional)
 If you have existing resources already configured on the APIC, you must import them into the Terraform state before running any `terraform plan` or `apply`. This prevents Terraform from attempting to recreate or destroy resources that already exist in the real world.
@@ -43,13 +50,18 @@ If you have existing resources already configured on the APIC, you must import t
       }
     }
     ```
-2. **Run the Script:** 
+2. **Run the Script:**
+    You can trigger the state import at any time using Make (which automatically loads your ACI credentials from `.env`):
     ```bash
-    ACI_PASSWORD=<apic-password> ./scripts/import-state.sh
+    make import
+    ```
+    Alternatively, you can run the script directly:
+    ```bash
+    ./scripts/import-state.sh
     ```
 3. **What the Script Does:** It acts as an automated import engine. It dynamically reads your `.auto.tfvars` variables, connects to the Cisco APIC to verify that those objects (VRFs, BDs, Subnets) actually exist, and automatically generates and runs the highly-specific `terraform import` commands for you. It is safe to run multiple times — resources already in state are skipped.
 
-**Key environment variables:**
+**Key Environment Variables (defined in `.env`):**
 
 | Variable | Default | Description |
 |---|---|---|
@@ -58,13 +70,14 @@ If you have existing resources already configured on the APIC, you must import t
 | `ACI_URL` | Cisco DevNet sandbox | Default APIC URL for all environments |
 | `ACI_URL_DEV` | `ACI_URL` | Override APIC URL for the `dev` environment |
 | `GITEA_URL` | `http://localhost:3000` | Gitea base URL |
+| `GITEA_USER` | `cisco-aci-admin` | Gitea admin user |
 | `GITEA_PASSWORD` | `Admin123!` | Gitea admin password for state backend auth |
-
-> **Note:** `bootstrap.sh` will call `import-state.sh` automatically if `ACI_PASSWORD` is set when it runs.
+| `TF_HTTP_USERNAME`| `GITEA_USER` | HTTP State Backend username for runner |
+| `TF_HTTP_PASSWORD`| `GITEA_PASSWORD` | HTTP State Backend password for runner |
 
 ### 4. Access Gitea
-- **URL**: http://localhost:3000
-- **Admin User**: `cisco-aci-admin` / `Admin123!`
+- **URL**: [http://localhost:3000](http://localhost:3000)
+- **Admin User**: `cisco-aci-admin` / `Admin123!` (or your custom credentials from `.env`)
 - **Standard User**: `cisco-aci-user` / `User123!`
 
 ## GitOps Workflow

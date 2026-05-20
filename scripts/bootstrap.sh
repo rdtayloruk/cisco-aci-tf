@@ -1,8 +1,31 @@
 #!/bin/bash
 set -e
 
+# Load .env file if it exists and we're not running via Make (which already exports them)
+if [ -f "$(dirname "$0")/../.env" ]; then
+    echo "Loading local environment variables from .env..."
+    # Filter out comments and empty lines before exporting
+    export $(grep -v '^#' "$(dirname "$0")/../.env" | grep -v '^[[:space:]]*$' | xargs)
+fi
+
+# --------------------------------------------------------------------------
+# Environment & Defaults
+# --------------------------------------------------------------------------
+ACI_USERNAME="${ACI_USERNAME:-admin}"
+ACI_PASSWORD="${ACI_PASSWORD:-}"
+_default_apic="${ACI_URL:-https://sandboxapicdc.cisco.com}"
+ACI_URL_DEV="${ACI_URL_DEV:-${_default_apic}}"
+
+GITEA_URL="${GITEA_URL:-http://localhost:3000}"
+GITEA_ORG="${GITEA_ORG:-cisco-aci}"
+GITEA_USER="${GITEA_USER:-cisco-aci-admin}"
+GITEA_PASSWORD="${GITEA_PASSWORD:-Admin123!}"
+
+TF_HTTP_USERNAME="${TF_HTTP_USERNAME:-${GITEA_USER}}"
+TF_HTTP_PASSWORD="${TF_HTTP_PASSWORD:-${GITEA_PASSWORD}}"
+
 echo "Waiting for Gitea to start..."
-while ! curl -s http://localhost:3000/ > /dev/null 2>&1; do
+while ! curl -s "${GITEA_URL}/" > /dev/null 2>&1; do
     echo "Gitea is unavailable - sleeping"
     sleep 3
 done
@@ -11,30 +34,30 @@ echo "Gitea is up!"
 # Wait a little bit for the DB to be fully ready
 sleep 5
 
-# 1. Create cisco-aci-admin user (this will also skip the install lock if it's the first admin)
-echo "Creating admin user..."
-docker exec -u git gitea gitea admin user create --username cisco-aci-admin --password 'Admin123!' --email cisco-aci-admin@example.com --admin || echo "Admin may already exist."
+# 1. Create Gitea admin user (this will also skip the install lock if it's the first admin)
+echo "Creating admin user '${GITEA_USER}'..."
+docker exec -u git gitea gitea admin user create --username "${GITEA_USER}" --password "${GITEA_PASSWORD}" --email "${GITEA_USER}@example.com" --admin || echo "Admin may already exist."
 
-# 2. Create cisco-aci-user
-echo "Creating standard user..."
+# 2. Create cisco-aci-user (standard user demo)
+echo "Creating standard user 'cisco-aci-user'..."
 docker exec -u git gitea gitea admin user create --username cisco-aci-user --password 'User123!' --email cisco-aci-user@example.com || echo "User may already exist."
 
 # 3. Use API to create organization, as gitea CLI doesn't have an 'admin org create' command
-echo "Creating cisco-aci organization..."
-curl -s -X POST "http://localhost:3000/api/v1/orgs" \
+echo "Creating '${GITEA_ORG}' organization..."
+curl -s -X POST "${GITEA_URL}/api/v1/orgs" \
     -H "accept: application/json" -H "Content-Type: application/json" \
-    -u cisco-aci-admin:'Admin123!' \
-    -d '{
-        "username": "cisco-aci",
-        "visibility": "public",
-        "description": "Cisco ACI GitOps"
-    }' || echo "Org creation failed (might already exist)."
+    -u "${GITEA_USER}":"${GITEA_PASSWORD}" \
+    -d "{
+        \"username\": \"${GITEA_ORG}\",
+        \"visibility\": \"public\",
+        \"description\": \"Cisco ACI GitOps\"
+    }" || echo "Org creation failed (might already exist)."
 
 # 4. Create cisco-aci-tf repository inside the organization
-echo "Creating cisco-aci-tf repository..."
-curl -s -X POST "http://localhost:3000/api/v1/orgs/cisco-aci/repos" \
+echo "Creating cisco-aci-tf repository in '${GITEA_ORG}'..."
+curl -s -X POST "${GITEA_URL}/api/v1/orgs/${GITEA_ORG}/repos" \
     -H "accept: application/json" -H "Content-Type: application/json" \
-    -u cisco-aci-admin:'Admin123!' \
+    -u "${GITEA_USER}":"${GITEA_PASSWORD}" \
     -d '{
         "name": "cisco-aci-tf",
         "description": "Terraform configuration for Cisco ACI",
@@ -55,7 +78,7 @@ echo "Restarting Gitea to apply actions configuration..."
 docker restart gitea
 
 echo "Waiting for Gitea to restart..."
-while ! curl -s -f http://localhost:3000/api/v1/version > /dev/null 2>&1; do
+while ! curl -s -f "${GITEA_URL}/api/v1/version" > /dev/null 2>&1; do
     sleep 3
 done
 sleep 5
@@ -70,10 +93,10 @@ if [ ! -f "runner_data/config.yaml" ]; then
     echo "Generating runner configuration..."
     mkdir -p runner_data
     docker run --rm --entrypoint "" -v "$(pwd)/runner_data:/data" gitea/act_runner:latest sh -c "act_runner generate-config > /data/config.yaml"
-    # Ensure the container network is set to cisco-aci-tf_gitea so jobs can access Gitea as 'server'
-    sed -i 's/network: ""/network: "cisco-aci-tf_gitea"/g' runner_data/config.yaml
     # Fix ownership of the generated files to the host user
     docker run --rm -v "$(pwd)/runner_data:/data" alpine chown -R "$(id -u):$(id -g)" /data || true
+    # Ensure the container network is set to cisco-aci-tf_gitea so jobs can access Gitea as 'server'
+    sed -i 's/network: ""/network: "cisco-aci-tf_gitea"/g' runner_data/config.yaml
 fi
 
 echo "Registering Runner..."
@@ -83,18 +106,39 @@ docker exec gitea-runner act_runner register --instance http://server:3000 --tok
 echo "Restarting Runner..."
 docker restart gitea-runner
 
+# 7. Configure Gitea Action Secrets automatically
+# --------------------------------------------------------------------------
+# Configure Repository Secrets
+# --------------------------------------------------------------------------
+set_gitea_secret() {
+    local name="$1"
+    local value="$2"
+    
+    if [ -z "$value" ]; then
+        echo "  [SKIP] Secret ${name} is empty"
+        return 0
+    fi
+    
+    echo "  Configuring Secret: ${name}..."
+    local status
+    status=$(curl -s -o /dev/null -w "%{http_code}" -X PUT "${GITEA_URL}/api/v1/repos/${GITEA_ORG}/cisco-aci-tf/actions/secrets/${name}" \
+        -H "accept: application/json" -H "Content-Type: application/json" \
+        -u "${GITEA_USER}:${GITEA_PASSWORD}" \
+        -d "{\"data\": \"${value}\"}")
+        
+    if [ "$status" -eq 201 ] || [ "$status" -eq 204 ]; then
+        echo "    Secret ${name} configured successfully (HTTP ${status})."
+    else
+        echo "    Warning: Failed to set secret ${name} (HTTP ${status})."
+    fi
+}
+
+echo "Configuring Gitea Actions secrets for repository '${GITEA_ORG}/cisco-aci-tf'..."
+set_gitea_secret "ACI_USERNAME" "${ACI_USERNAME}"
+set_gitea_secret "ACI_PASSWORD" "${ACI_PASSWORD}"
+set_gitea_secret "ACI_URL" "${ACI_URL_DEV}"
+set_gitea_secret "TF_HTTP_USERNAME" "${TF_HTTP_USERNAME}"
+set_gitea_secret "TF_HTTP_PASSWORD" "${TF_HTTP_PASSWORD}"
+
 echo "Bootstrap completed."
 echo ""
-
-# Optionally import existing ACI state into each environment's Terraform backend.
-# This step requires ACI_PASSWORD to be set and the APIC to be reachable.
-if [ -n "${ACI_PASSWORD:-}" ]; then
-    echo "ACI_PASSWORD is set — running state import from APIC..."
-    bash "$(dirname "$0")/import-state.sh"
-else
-    echo "To import existing ACI resources into Terraform state, run:"
-    echo "  ACI_PASSWORD=<apic-password> ./scripts/import-state.sh"
-    echo ""
-    echo "Optional overrides (see import-state.sh for the full list):"
-    echo "  ACI_USERNAME=admin ACI_URL=https://<apic-host> ACI_PASSWORD=... ./scripts/import-state.sh"
-fi
