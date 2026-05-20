@@ -8,7 +8,7 @@ endif
 export USER_UID ?= $(shell id -u)
 export USER_GID ?= $(shell id -g)
 
-.PHONY: up down bootstrap logs clean init import
+.PHONY: up down bootstrap logs clean init import unlock
 
 init: up bootstrap
 
@@ -23,6 +23,11 @@ bootstrap:
 
 import:
 	./scripts/import-state.sh
+
+unlock:
+	@echo "Force-unlocking all Terraform remote states in Gitea database..."
+	@docker exec -i gitea sqlite3 /data/gitea/gitea.db "DELETE FROM package_property WHERE name = 'terraform.lock';"
+	@echo "All states successfully unlocked!"
 
 logs:
 	docker compose logs -f
