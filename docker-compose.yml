@@ -7,8 +7,8 @@ services:
     image: gitea/gitea:latest
     container_name: gitea
     environment:
-      - USER_UID=1000
-      - USER_GID=1000
+      - USER_UID=${USER_UID:-1000}
+      - USER_GID=${USER_GID:-1000}
       - GITEA__database__DB_TYPE=sqlite3
       - GITEA__security__INSTALL_LOCK=true
     restart: always
@@ -26,9 +26,14 @@ services:
     image: gitea/act_runner:latest
     container_name: gitea-runner
     environment:
+      - USER_UID=${USER_UID:-1000}
+      - USER_GID=${USER_GID:-1000}
       - GITEA_INSTANCE_URL=http://server:3000
       - DOCKER_HOST=unix:///var/run/docker.sock
       - CONFIG_FILE=/data/config.yaml
+      - HTTP_PROXY=${HTTP_PROXY:-}
+      - HTTPS_PROXY=${HTTPS_PROXY:-}
+      - NO_PROXY=${NO_PROXY:-}
     restart: always
     networks:
       - gitea

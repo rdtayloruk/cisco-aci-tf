@@ -12,3 +12,6 @@ runner_data/
 
 # Local environment variables
 .env
+
+# agent skills
+.agents

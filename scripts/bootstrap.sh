@@ -97,6 +97,19 @@ if [ ! -f "runner_data/config.yaml" ]; then
     docker run --rm -v "$(pwd)/runner_data:/data" alpine chown -R "$(id -u):$(id -g)" /data || true
     # Ensure the container network is set to cisco-aci-tf_gitea so jobs can access Gitea as 'server'
     sed -i 's/network: ""/network: "cisco-aci-tf_gitea"/g' runner_data/config.yaml
+    # Inject proxies into config.yaml under runner -> envs if set in host environment
+    if [ -n "${HTTP_PROXY:-}" ]; then
+        echo "Injecting HTTP_PROXY into runner configuration..."
+        sed -i "/  envs:/a\    HTTP_PROXY: ${HTTP_PROXY}" runner_data/config.yaml
+    fi
+    if [ -n "${HTTPS_PROXY:-}" ]; then
+        echo "Injecting HTTPS_PROXY into runner configuration..."
+        sed -i "/  envs:/a\    HTTPS_PROXY: ${HTTPS_PROXY}" runner_data/config.yaml
+    fi
+    if [ -n "${NO_PROXY:-}" ]; then
+        echo "Injecting NO_PROXY into runner configuration..."
+        sed -i "/  envs:/a\    NO_PROXY: ${NO_PROXY}" runner_data/config.yaml
+    fi
 fi
 
 echo "Registering Runner..."

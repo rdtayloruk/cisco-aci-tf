@@ -4,6 +4,10 @@ ifneq (,$(wildcard .env))
     export
 endif
 
+# Dynamic UID/GID defaults if not already set in environment or .env
+export USER_UID ?= $(shell id -u)
+export USER_GID ?= $(shell id -g)
+
 .PHONY: up down bootstrap logs clean init import
 
 init: up bootstrap
