@@ -5,16 +5,25 @@ on:
     branches:
       - main
     paths:
-      - 'environments/**'
+      - 'scopes/**'
 
 jobs:
   plan:
-    name: Plan (${{ matrix.environment }}/${{ matrix.component }})
+    name: Plan (${{ matrix.scope }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        environment: [dev]
-        component: [tenants, access-policies]
+        include:
+          - scope: scopes/tenants/OSS
+            state_name: tenant-oss
+          - scope: scopes/tenants/OSS-DMZ
+            state_name: tenant-oss-dmz
+          - scope: scopes/access-policies/shared
+            state_name: access-shared
+          - scope: scopes/access-policies/services
+            state_name: access-services
+          - scope: scopes/fabric-policies/local-fabric
+            state_name: fabric-local
       fail-fast: false
 
     steps:
@@ -25,12 +34,12 @@ jobs:
         uses: hashicorp/setup-terraform@v2
 
       - name: Terraform Init
-        working-directory: environments/${{ matrix.environment }}/${{ matrix.component }}
+        working-directory: ${{ matrix.scope }}
         run: |
           terraform init \
-            -backend-config="address=${{ gitea.server_url }}/api/packages/${{ gitea.repository_owner }}/terraform/state/${{ matrix.environment }}-${{ matrix.component }}" \
-            -backend-config="lock_address=${{ gitea.server_url }}/api/packages/${{ gitea.repository_owner }}/terraform/state/${{ matrix.environment }}-${{ matrix.component }}/lock" \
-            -backend-config="unlock_address=${{ gitea.server_url }}/api/packages/${{ gitea.repository_owner }}/terraform/state/${{ matrix.environment }}-${{ matrix.component }}/lock" \
+            -backend-config="address=${{ gitea.server_url }}/api/packages/${{ gitea.repository_owner }}/terraform/state/${{ matrix.state_name }}" \
+            -backend-config="lock_address=${{ gitea.server_url }}/api/packages/${{ gitea.repository_owner }}/terraform/state/${{ matrix.state_name }}/lock" \
+            -backend-config="unlock_address=${{ gitea.server_url }}/api/packages/${{ gitea.repository_owner }}/terraform/state/${{ matrix.state_name }}/lock" \
             -backend-config="lock_method=POST" \
             -backend-config="unlock_method=DELETE" \
             -backend-config="retry_wait_min=5"
@@ -39,7 +48,7 @@ jobs:
           TF_HTTP_PASSWORD: ${{ secrets.TF_HTTP_PASSWORD }}
 
       - name: Terraform Plan
-        working-directory: environments/${{ matrix.environment }}/${{ matrix.component }}
+        working-directory: ${{ matrix.scope }}
         run: terraform plan -no-color 2>&1 | tee plan.txt
         env:
           TF_VAR_aci_username: ${{ secrets.ACI_USERNAME }}
@@ -51,8 +60,8 @@ jobs:
       - name: Post Plan as PR Comment
         if: always()
         run: |
-          jq -n --rawfile plan environments/${{ matrix.environment }}/${{ matrix.component }}/plan.txt \
-            '{"body": ("## Plan: `${{ matrix.environment }}/${{ matrix.component }}`\n```hcl\n" + $plan + "```")}' \
+          jq -n --rawfile plan ${{ matrix.scope }}/plan.txt \
+            '{"body": ("## Plan: `${{ matrix.scope }}`\n```hcl\n" + $plan + "```")}' \
           | curl -s -X POST \
               "${{ gitea.server_url }}/api/v1/repos/${{ gitea.repository }}/issues/${{ github.event.number }}/comments" \
               -H "Authorization: token ${{ github.token }}" \

@@ -33,7 +33,7 @@ If you have existing resources already configured on the APIC, you must import t
 **Important:** The `import-state.sh` script does **not** automatically generate Terraform code (`.tf` or `.tfvars` files) for you. It only updates the backend state file.
 
 #### How to use the Import Script
-1. **Define Your Infrastructure in Code First:** Before running the script, you must manually define the existing ACI resources in your `.auto.tfvars` file (e.g., `environments/dev/tenants/dev.auto.tfvars`).
+1. **Define Your Infrastructure in Code First:** Before running the script, you must manually define the existing ACI resources in your `.auto.tfvars` file (e.g., `scopes/tenants/OSS/tenant.auto.tfvars`).
     ```hcl
     # Example dev.auto.tfvars defining an existing VRF and Bridge Domain
     vrfs = ["dev_vrf"]
@@ -147,7 +147,7 @@ Always perform your feature developments inside the separately cloned `cisco-aci
    ```bash
    git checkout -b feature/my-new-config
    ```
-2. **Develop**: Make your Terraform changes under the appropriate folder in the `environments/` directory (e.g., `environments/dev/tenants/`, etc.).
+2. **Develop**: Make your Terraform changes under the appropriate folder in the `scopes/` directory (e.g., `scopes/tenants/OSS/`, etc.).
 3. **Commit & Push**:
    ```bash
    git add .
@@ -169,13 +169,18 @@ Always perform your feature developments inside the separately cloned `cisco-aci
   - `import-state.sh`: Imports pre-existing ACI resources into Terraform state.
 - `repo/`: Source code for the Cisco ACI Terraform project.
   - `.gitea/workflows/`: CI/CD pipeline definitions.
-  - `modules/`: Standardized, reusable architectural blocks for ACI.
-    - `aci-tenant/`: Deploys Tenant-level structures (Tenant, VRFs, Bridge Domains, Subnets, App Profiles, EPGs) dynamically.
-    - `aci-access/`: Manages Access and Physical policies (VLAN pools, Physical Domains, AAEPs).
-  - `environments/`: Root composition modules for each APIC instance, maintaining isolated state boundaries:
-    - `dev/`: Development APIC instance.
-    *Each environment contains:*
-    - `access-policies/`: Physical/Access configurations (domains, VLANs, switch policies).
-    - `fabric-policies/`: Global Fabric policies (DNS, NTP, BGP Route Reflectors).
-    - `tenants/`: Dynamic logical customer configuration calling the reusable `aci-tenant` module.
+  - `modules/`: Standardized, reusable collection-based modules for ACI:
+    - `tenant/`: Tenant creation.
+    - `vrf/`: VRF collection module.
+    - `bd/`: Bridge Domain and Subnets collection module.
+    - `epg/`: Application Profiles, EPGs, contract, and domain bindings.
+    - `contract/`: Contract and subject collection module.
+    - `vlan-pool/`: VLAN Pool and ranges collection module.
+    - `aaep/`: Attachable Access Entity Profile (AAEP) and domain associations.
+    - `interface-policy-group/`: Leaf access port and bundle policy groups.
+    - `static-binding/`: Static path binding collection module.
+  - `scopes/`: Execution scopes mapped to configuration domains:
+    - `tenants/`: Tenant configurations (e.g., `OSS/`, `OSS-DMZ/`).
+    - `access-policies/`: Physical/Access configurations (e.g., `shared/`, `services/`).
+    - `fabric-policies/`: Global/shared fabric configurations (e.g., `local-fabric/`).
 

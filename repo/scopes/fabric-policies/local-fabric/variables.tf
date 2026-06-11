@@ -1,0 +1,16 @@
+variable "aci_username" {
+  description = "Username for Cisco ACI APIC"
+  type        = string
+  default     = "admin"
+}
+
+variable "aci_password" {
+  description = "Password for Cisco ACI APIC"
+  type        = string
+  sensitive   = true
+}
+
+variable "aci_url" {
+  description = "URL for Cisco ACI APIC"
+  type        = string
+}
